@@ -6,7 +6,7 @@ description: >
   signature scan for trivial edits to a full dependency trace, behavioral contract check, and
   scope-creep detection for risky refactors. Passive, token-efficient, and works across Claude
   Code, OpenClaw, Cursor, Codex CLI, and Gemini CLI.
-version: "1.4.0"
+version: "1.5.0"
 tags:
   - code-quality
   - regression
@@ -225,8 +225,8 @@ Answer these questions:
 5. Any shared utilities touched (imported by 3+ files)?
 6. Any files deleted or renamed?
 
-**Tier 1** — ALL true: 1 file, <10 lines, no sig/type/shared changes, no deletions
-**Tier 2** — ANY true: 2-3 files, 10-50 lines, shared utility, new dep, runtime config
+**Tier 1** — ALL true: 1 file, <10 lines, no sig/type changes, no deletions. Note: for trivial edits (comments, whitespace, string values), shared-utility status does not force Tier 2. For code logic changes to shared utilities, escalate to Tier 2.
+**Tier 2** — ANY true: 2-3 files, 10-50 lines, shared utility (code logic change), new dep, runtime config
 **Tier 3** — ANY true: >3 files, >50 lines, sig change, type change, deletion, API change, schema change, scope creep
 
 **Escalation rule:** Tier 1 scan finds signature change → immediately escalate to Tier 3.
@@ -252,13 +252,16 @@ Rules: Do not give yourself the benefit of the doubt. Be specific. Do NOT skip m
 
 **Tier 2 adds:**
 - Caller trace (search function NAME across all files, not just imports; check dynamic import() patterns)
+- Alignment check — lightweight (list each modified file; for each: does this change serve the user's request? Flag anything that doesn't)
 - Run existing tests (detect runner, execute, analyze failures as expected or unexpected)
+  - If no test runner is detected: fall back to the strongest available static check (type checker, compiler, or linter). Mark result as PASS WITH WARNINGS and note the absence of tests.
+  - For TypeScript projects with composite configs: run `tsc -b` or `tsc -p <config>` against the specific project. Root-level `tsc --noEmit` can silently pass due to project references.
 - Orphan check (unused imports, broken imports)
 
 **Tier 3 adds:**
 - Transitive dependency trace (2nd order — callers of callers)
 - Behavioral contract check (before vs after for each changed function)
-- Alignment check — CRITICAL (compare actual changes vs. original request, flag scope creep)
+- Alignment check — full (compare actual changes vs. original request, detailed scope creep analysis)
 - Targeted test generation (3-5 edge-case tests for the change)
 
 See `references/verification-protocol.md` for the complete step-by-step protocol with decision trees.
@@ -269,7 +272,11 @@ After the verification, you have findings. What you do with them is up to you:
 
 **If nothing found:** Continue. Don't mention the checkpoint to the user.
 
-**If issues found:** Fix what you can using your own judgment. Then decide:
+**If issues found:** Fix what you can using your own judgment. General guidance:
+- If the change was user-requested and findings are downstream (callers, types) → prefer to fix
+- If the change introduces unrequested behavior or deletions → escalate to the user before fixing
+
+Then decide:
 - Can I fix this confidently? → Fix it, re-verify, and tell the user what was caught
 - Am I unsure? → Tell the user what you found and ask how to proceed
 - Is this a design decision? → Tell the user and let them decide
@@ -282,7 +289,7 @@ After the verification, you have findings. What you do with them is up to you:
 2. Escalate, never downgrade. Tier 3 situations never get Tier 1 treatment.
 3. Be honest about confidence. If you can't verify something, mark ⚠️, not ✅.
 4. Don't over-alert. Clean changes get clean passes. Crying wolf trains users to ignore the guard.
-5. Alignment check is non-negotiable in Tier 3.
+5. Alignment check runs at Tier 2 (lightweight) and Tier 3 (full). Never skip it.
 6. Test failures aren't always regressions. Distinguish expected vs unexpected.
 7. This checkpoint complements testing — it doesn't replace it.
 8. Work without git. Use memory and file reading if git is unavailable.

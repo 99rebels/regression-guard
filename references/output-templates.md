@@ -45,16 +45,25 @@ Modified: [filepath] ([N] lines)
 🛡️ Regression Guard — Standard Check
 Modified: [filepath(s)] ([N] lines, [N] files)
 
-Self-interrogation: [1-line answer]
+Self-interrogation:
+  Asked: [original request]
+  Beyond scope: [yes/no — details if yes]
+  Unverified: [what might break]
 
 Callers traced: [N]
   ✅ [filepath] — [status]
   ⚠️ [filepath] — [issue]
 
+Alignment:
+  ✅ [filepath] — [change] (requested)
+  ⚠️ [filepath] — [change] (NOT requested)
+
 Tests: [runner] — [summary]
   ✅ All [N] tests passed
   — or —
   ❌ [N] tests failed: [brief reason]
+  — or —
+  ⚠️ No test runner — [static check used] (PASS WITH WARNINGS)
 
 Imports:
   ✅ No issues
@@ -98,8 +107,7 @@ Tests:
   Existing: [N] → ✅ / ❌ [summary]
   Generated: [N] → ✅ / ❌ [summary]
 
-═════════════════════════════
 VERDICT: PASS / PASS WITH WARNINGS / FAIL
-═════════════════════════════
-
 [If FAIL or WARNING: numbered list of issues, each with → fix]
+
+Note: For clean passes (VERDICT: PASS), compress output. Skip empty sections. The ══ separator is optional on clean passes.
