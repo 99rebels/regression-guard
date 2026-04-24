@@ -6,7 +6,7 @@ description: >
   signature scan for trivial edits to a full dependency trace, behavioral contract check, and
   scope-creep detection for risky refactors. Passive, token-efficient, and works across Claude
   Code, OpenClaw, Cursor, Codex CLI, and Gemini CLI.
-version: "1.2.0"
+version: "1.3.0"
 tags:
   - code-quality
   - regression
@@ -182,6 +182,19 @@ See `references/configuration.md` for full config reference.
 
 This section is for the agent. It contains the complete verification instructions.
 
+### User-Facing Behavior
+
+Your output goes directly to the developer. They are mid-workflow.
+
+- Tier 1 is **silent when clean** — if nothing was found, do not mention the check
+- Only output when something needs attention (warnings, escalations, auto-fixes)
+- The user's first sight of Regression Guard should be when it caught something
+- Use plain text, not markdown code blocks
+- Symbols: 🛡️ ✅ ⚠️ 🔴 → ══
+- Every ⚠️ or 🔴 must have a → action
+- Do not replace or modify the user's existing tests
+- Do not slow down the workflow — run checks efficiently
+
 ### Activation Rules
 
 This skill activates **automatically after any code modification**. Do not wait to be asked.
@@ -266,3 +279,58 @@ See `references/output-templates.md` for locked templates for each tier.
 6. Test failures aren't always regressions. Distinguish expected vs unexpected.
 7. Keep it concise. The user is mid-workflow.
 8. Work without git. Use memory and file reading if git is unavailable.
+9. Tier 1 is silent when clean. Only output if something was found.
+
+### Step 4: Auto-Fix (Tier 2 and Tier 3)
+
+When the verification finds issues, attempt to fix them automatically — then re-verify once.
+
+**The auto-fix loop:**
+1. Verification finds issues → attempt to fix them
+2. Re-verify (one more pass)
+3. If clean → tell the user the change is done, issues were caught and fixed
+4. If still broken → stop. Report remaining issues to the user. Do not try again.
+
+**Maximum 2 verification passes.** This prevents endless loops and keeps token cost bounded.
+
+**The user only sees the final result** — not every iteration. If everything was fixed: a clean summary. If something remains: the remaining issues with actions.
+
+**What the auto-fix CAN fix:**
+- Update callers when a function signature changed (add/remove/reorder arguments)
+- Remove or update broken imports
+- Revert scope-creep changes that were not part of the original request
+- Fix default parameter value mismatches
+- Update type references when a type definition changed
+
+**What the auto-fix must NOT do:**
+- Rewrite logic or change behavior
+- Modify the user's existing test files
+- Add new code that wasn't there before
+- Make design decisions or architectural choices
+- Fix issues that require understanding business logic
+
+**The boundary rule:** Only fix things that are *directly and mechanically* caused by the change. If the fix requires judgment or reasoning about what the code should do, stop and report to the user.
+
+**Auto-fix output:**
+
+If all issues fixed:
+```
+🛡️ Regression Guard — Auto-Fixed
+Modified: [files] ([N] lines)
+Issues found: [N] — all fixed
+Re-verified: ✅ clean
+Result: PASS
+```
+
+If some issues remain:
+```
+🛡️ Regression Guard — Partial Fix
+Modified: [files] ([N] lines)
+Fixed: [N] issues
+Remaining: [N] issues
+
+1. [issue description]
+   → [recommended action]
+
+Result: PASS WITH WARNINGS / FAIL
+```
