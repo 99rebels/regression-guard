@@ -6,13 +6,9 @@ description: >
   signature scan for trivial edits to a full dependency trace, behavioral contract check, and
   scope-creep detection for risky refactors. Passive, token-efficient, and works across Claude
   Code, OpenClaw, Cursor, Codex CLI, and Gemini CLI.
-version: "1.5.0"
-tags:
-  - code-quality
-  - regression
-  - testing
-  - code-review
-  - developer-tools
+metadata:
+  version: "1.5.0"
+  author: "99rebels"
 ---
 
 # Regression Guard
