@@ -253,9 +253,7 @@ Rules: Do not give yourself the benefit of the doubt. Be specific. Do NOT skip m
 **Tier 2 adds:**
 - Caller trace (search function NAME across all files, not just imports; check dynamic import() patterns)
 - Alignment check — lightweight (list each modified file; for each: does this change serve the user's request? Flag anything that doesn't)
-- Run existing tests (detect runner, execute, analyze failures as expected or unexpected)
-  - If no test runner is detected: fall back to the strongest available static check (type checker, compiler, or linter). Mark result as PASS WITH WARNINGS and note the absence of tests.
-  - For TypeScript projects with composite configs: run `tsc -b` or `tsc -p <config>` against the specific project. Root-level `tsc --noEmit` can silently pass due to project references.
+- Run existing tests or use the best available verification method. If no test runner is detected, use your judgment — type checker, linter, compiler, or generate and run tests if appropriate. If you couldn't fully verify, note what's missing in your output.
 - Orphan check (unused imports, broken imports)
 
 **Tier 3 adds:**
