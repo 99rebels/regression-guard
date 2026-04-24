@@ -146,6 +146,22 @@ Gemini CLI:    .gemini/skills/regression-guard/
 
 No dependencies. No configuration required. Works immediately.
 
+### Helper Scripts (Optional)
+
+Two bash scripts are included for faster/more thorough checks. The agent can use these as shortcuts, or follow the SKILL.md instructions manually with grep and git. Both are optional.
+
+**Dependency tracer** — find all callers of a function/module, up to N levels deep:
+```
+scripts/trace-dependencies.sh <filepath_or_function> [search_dir] [depth]
+```
+Use instead of manual grep for caller tracing. Handles multiple languages (JS/TS, Python, Go, Rust, Ruby).
+
+**Contract diff** — compare function signatures between two git refs:
+```
+scripts/contract-diff.sh [before_ref] [after_ref]
+```
+Use instead of manual git diff for signature scanning. Detects broken imports from deleted files.
+
 ## Configuration (Optional)
 
 Place `.regression-guard.json` in your project root:
