@@ -6,7 +6,7 @@ description: >
   signature scan for trivial edits to a full dependency trace, behavioral contract check, and
   scope-creep detection for risky refactors. Passive, token-efficient, and works across Claude
   Code, OpenClaw, Cursor, Codex CLI, and Gemini CLI.
-version: "1.3.0"
+version: "1.4.0"
 tags:
   - code-quality
   - regression
@@ -21,7 +21,7 @@ tags:
 
 AI coding agents introduce regressions at alarming rates. The SWE-CI benchmark (March 2026) found most models break previously working code in 3 out of 4 tasks. Developers spend 38% of their week debugging AI-generated bugs they didn't write.
 
-Regression Guard runs automatically after every code change. It classifies the risk, checks for breakage, and reports to you — so you never ship silent regressions.
+Regression Guard runs automatically after every code change. It classifies the risk, checks for breakage, and surfaces findings to the agent — so regressions get caught before the user ever sees them.
 
 ## When to Use
 
@@ -34,12 +34,25 @@ Regression Guard runs automatically after every code change. It classifies the r
 
 ```
 1. AI makes a code change
-2. Regression Guard classifies the change severity
-3. Runs the matching verification tier
-4. Reports findings to you
+2. Regression Guard checkpoint runs
+3. Findings surfaced to the agent
+4. Agent uses its own judgment to fix or escalate
+5. Agent returns work to user
 ```
 
-### Three Tiers — Right-Sized Verification
+This skill is a **checkpoint**, not a controller. It reveals problems. The agent decides what to do about them — whether to fix, escalate to the user, or proceed if the findings are acceptable.
+
+### Where It Fits in the Flow
+
+Regression Guard runs **after code changes, before testing**:
+
+```
+Code change → Regression Guard checkpoint → Fix findings → Run tests → Return to user
+```
+
+Tests verify the changed code works. Regression Guard verifies the change didn't break anything *else*. They're complementary — neither replaces the other.
+
+## Three Tiers — Right-Sized Checking
 
 ```
 🟢 Tier 1 — Light Check (trivial changes)
@@ -68,8 +81,6 @@ Before mechanical checks, the agent answers honestly:
 
 This catches things scripts can't — like behavioral changes that keep the same signature but return different values.
 
-See `references/verification-protocol.md` for the full step-by-step protocol.
-
 ## What It Checks
 
 ```
@@ -85,17 +96,10 @@ See `references/verification-protocol.md` for the full step-by-step protocol.
 
 ## Output Examples
 
-**Clean Tier 1 pass:**
+**Clean Tier 1 — silent, no output to user:**
+The agent runs the check, finds nothing, and proceeds. The user never sees Regression Guard.
 
-```
-🛡️ Regression Guard — Light Check
-Modified: src/components/Button.tsx (2 lines)
-✅ No signature changes
-✅ Imports intact
-Result: PASS
-```
-
-**Tier 2 with warning:**
+**Tier 2 with finding:**
 
 ```
 🛡️ Regression Guard — Standard Check
@@ -108,8 +112,8 @@ Callers traced: 3
 
 Tests: ✅ All 12 passed
 
-Result: PASS WITH WARNINGS
-→ Review: src/api/notifications.ts (default parameter change)
+Findings: 1 issue for agent review
+→ notifications.ts uses default parameter that changed — verify or update
 ```
 
 **Tier 3 catching scope creep:**
@@ -123,14 +127,12 @@ Alignment Check:
   ⚠️ middleware/auth.ts — switched to JWT (NOT requested)
   ⚠️ services/session.ts — DELETED (NOT requested)
 
-═════════════════════════════
-VERDICT: FAIL
-═════════════════════════════
-1. Session service deleted — 3 broken imports
-→ Revert auth.ts and session.ts. Only add rate limiting.
+Findings: 2 issues for agent review
+→ Auth system changed without request — revert or confirm with user
+→ Session service deleted — 3 broken imports in logout.ts, api.ts, csrf.ts
 ```
 
-See `references/output-templates.md` for full Tier 3 output format and all templates.
+See `references/output-templates.md` for full templates.
 
 ## Installation
 
@@ -138,7 +140,7 @@ Drop the `regression-guard/` folder into your agent's skill directory:
 
 ```
 Claude Code:   .claude/skills/regression-guard/
-OpenClaw:      ~/.openclaw/workspace/skills/regression-guard/
+OpenClaw:      skills/regression-guard/
 Cursor:        .cursor/skills/regression-guard/
 Codex CLI:     .codex/skills/regression-guard/
 Gemini CLI:    .gemini/skills/regression-guard/
@@ -148,19 +150,17 @@ No dependencies. No configuration required. Works immediately.
 
 ### Helper Scripts (Optional)
 
-Two bash scripts are included for faster/more thorough checks. The agent can use these as shortcuts, or follow the SKILL.md instructions manually with grep and git. Both are optional.
+Two bash scripts are included. The agent can use these as shortcuts, or follow the SKILL.md instructions manually. Both are optional.
 
-**Dependency tracer** — find all callers of a function/module, up to N levels deep:
+**Dependency tracer** — find all callers of a function/module:
 ```
 scripts/trace-dependencies.sh <filepath_or_function> [search_dir] [depth]
 ```
-Use instead of manual grep for caller tracing. Handles multiple languages (JS/TS, Python, Go, Rust, Ruby).
 
 **Contract diff** — compare function signatures between two git refs:
 ```
 scripts/contract-diff.sh [before_ref] [after_ref]
 ```
-Use instead of manual git diff for signature scanning. Detects broken imports from deleted files.
 
 ## Configuration (Optional)
 
@@ -178,22 +178,30 @@ Place `.regression-guard.json` in your project root:
 
 See `references/configuration.md` for full config reference.
 
+---
+
 ## The Protocol — What the Agent Follows
 
-This section is for the agent. It contains the complete verification instructions.
+This section is for the agent. It contains the verification instructions.
 
-### User-Facing Behavior
+### Design Philosophy
 
-Your output goes directly to the developer. They are mid-workflow.
+This skill is a **checkpoint**, not a controller. Its job is to reveal problems to you — the agent. You decide what to do with the findings.
 
-- Tier 1 is **silent when clean** — if nothing was found, do not mention the check
-- Only output when something needs attention (warnings, escalations, auto-fixes)
-- The user's first sight of Regression Guard should be when it caught something
-- Use plain text, not markdown code blocks
-- Symbols: 🛡️ ✅ ⚠️ 🔴 → ══
-- Every ⚠️ or 🔴 must have a → action
-- Do not replace or modify the user's existing tests
-- Do not slow down the workflow — run checks efficiently
+- Use your own judgment on whether to fix, escalate, or proceed
+- Use your own judgment on when you've checked enough
+- Fix what you can, ask the user about what you can't
+- Don't let these checks replace your existing debugging or testing workflow
+- If tests exist in the project, run them AFTER this checkpoint, not instead of it
+
+### When to Output to the User
+
+- **Silent when clean** — if the checkpoint finds nothing, don't mention it
+- **Output when findings exist** — surface what you found so the user knows what happened
+- **Output after fixing** — if you fixed the findings, tell the user briefly what was caught and fixed
+- **Escalate when unsure** — if you found something but aren't sure how to handle it, tell the user
+
+Use plain text with these symbols: 🛡️ ✅ ⚠️ 🔴 →
 
 ### Activation Rules
 
@@ -255,19 +263,18 @@ Rules: Do not give yourself the benefit of the doubt. Be specific. Do NOT skip m
 
 See `references/verification-protocol.md` for the complete step-by-step protocol with decision trees.
 
-### Step 3: Output
+### Step 3: Handle Findings
 
-**Style rules — follow exactly:**
-- Plain text, no markdown code blocks in the report
-- Symbols: 🛡️ ✅ ⚠️ 🔴 → ══
-- File paths: forward slashes, relative to root
-- Verdict: exactly PASS, PASS WITH WARNINGS, or FAIL
-- Every ⚠️ or 🔴 must have a → action
-- Output AFTER the code change, as part of your response
+After the verification, you have findings. What you do with them is up to you:
 
-**Line limits:** Tier 1: max 5. Tier 2: max 15. Tier 3: max 40.
+**If nothing found:** Continue. Don't mention the checkpoint to the user.
 
-See `references/output-templates.md` for locked templates for each tier.
+**If issues found:** Fix what you can using your own judgment. Then decide:
+- Can I fix this confidently? → Fix it, re-verify, and tell the user what was caught
+- Am I unsure? → Tell the user what you found and ask how to proceed
+- Is this a design decision? → Tell the user and let them decide
+
+**After fixing:** Re-run the verification to confirm your fix didn't introduce new issues. Use your judgment on how many passes is enough — but don't loop indefinitely.
 
 ### Rules
 
@@ -277,60 +284,5 @@ See `references/output-templates.md` for locked templates for each tier.
 4. Don't over-alert. Clean changes get clean passes. Crying wolf trains users to ignore the guard.
 5. Alignment check is non-negotiable in Tier 3.
 6. Test failures aren't always regressions. Distinguish expected vs unexpected.
-7. Keep it concise. The user is mid-workflow.
+7. This checkpoint complements testing — it doesn't replace it.
 8. Work without git. Use memory and file reading if git is unavailable.
-9. Tier 1 is silent when clean. Only output if something was found.
-
-### Step 4: Auto-Fix (Tier 2 and Tier 3)
-
-When the verification finds issues, attempt to fix them automatically — then re-verify once.
-
-**The auto-fix loop:**
-1. Verification finds issues → attempt to fix them
-2. Re-verify (one more pass)
-3. If clean → tell the user the change is done, issues were caught and fixed
-4. If still broken → stop. Report remaining issues to the user. Do not try again.
-
-**Maximum 2 verification passes.** This prevents endless loops and keeps token cost bounded.
-
-**The user only sees the final result** — not every iteration. If everything was fixed: a clean summary. If something remains: the remaining issues with actions.
-
-**What the auto-fix CAN fix:**
-- Update callers when a function signature changed (add/remove/reorder arguments)
-- Remove or update broken imports
-- Revert scope-creep changes that were not part of the original request
-- Fix default parameter value mismatches
-- Update type references when a type definition changed
-
-**What the auto-fix must NOT do:**
-- Rewrite logic or change behavior
-- Modify the user's existing test files
-- Add new code that wasn't there before
-- Make design decisions or architectural choices
-- Fix issues that require understanding business logic
-
-**The boundary rule:** Only fix things that are *directly and mechanically* caused by the change. If the fix requires judgment or reasoning about what the code should do, stop and report to the user.
-
-**Auto-fix output:**
-
-If all issues fixed:
-```
-🛡️ Regression Guard — Auto-Fixed
-Modified: [files] ([N] lines)
-Issues found: [N] — all fixed
-Re-verified: ✅ clean
-Result: PASS
-```
-
-If some issues remain:
-```
-🛡️ Regression Guard — Partial Fix
-Modified: [files] ([N] lines)
-Fixed: [N] issues
-Remaining: [N] issues
-
-1. [issue description]
-   → [recommended action]
-
-Result: PASS WITH WARNINGS / FAIL
-```
